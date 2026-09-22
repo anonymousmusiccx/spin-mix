@@ -4,8 +4,9 @@
  * Crossfader with Curves, and Master Output Controls.
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { DeckState } from '../types';
+import { AudioEngine } from '../audio/audioEngine';
 import { RotaryKnob } from './RotaryKnob';
 import { Headphones, Sliders, Volume2 } from 'lucide-react';
 
@@ -15,7 +16,7 @@ interface MixerSectionProps {
   crossfader: number; // -1 to +1
   crossfaderCurve: 'smooth' | 'sharp';
   masterVolume: number;
-  meterLevels: { master: number; deckA: number; deckB: number };
+  audioEngine: AudioEngine;
   onUpdateDeckA: (updates: Partial<DeckState>) => void;
   onUpdateDeckB: (updates: Partial<DeckState>) => void;
   onCrossfaderChange: (val: number) => void;
@@ -23,40 +24,73 @@ interface MixerSectionProps {
   onMasterVolumeChange: (val: number) => void;
 }
 
+function barColorClass(i: number, heightBars: number, isActive: boolean): string {
+  if (!isActive) return 'w-1.5 h-2 rounded-[1px] transition-colors duration-75 bg-slate-800';
+  if (i >= heightBars - 2) return 'w-1.5 h-2 rounded-[1px] transition-colors duration-75 bg-rose-500 led-glow-red';
+  if (i >= heightBars - 4) return 'w-1.5 h-2 rounded-[1px] transition-colors duration-75 bg-amber-400 led-glow-amber';
+  return 'w-1.5 h-2 rounded-[1px] transition-colors duration-75 bg-emerald-400 led-glow-green';
+}
+
+/**
+ * Renders a vertical LED VU meter column and paints it at 60fps by writing
+ * directly to the bar DOM nodes via refs. This deliberately never calls
+ * setState, so it never triggers a React re-render of itself or any parent -
+ * only the raw <div> className attributes are mutated each frame. This is
+ * what keeps a live audio meter from tanking the whole app's frame rate.
+ */
+const VuMeterColumn: React.FC<{ getLevel: () => number; heightBars?: number }> = React.memo(
+  ({ getLevel, heightBars = 12 }) => {
+    const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+    useEffect(() => {
+      let animId: number;
+      const paint = () => {
+        const level = getLevel();
+        for (let i = heightBars - 1; i >= 0; i--) {
+          const el = barRefs.current[i];
+          if (!el) continue;
+          const threshold = i / heightBars;
+          el.className = barColorClass(i, heightBars, level >= threshold);
+        }
+        animId = requestAnimationFrame(paint);
+      };
+      animId = requestAnimationFrame(paint);
+      return () => cancelAnimationFrame(animId);
+    }, [getLevel, heightBars]);
+
+    const bars = [];
+    for (let i = heightBars - 1; i >= 0; i--) {
+      bars.push(
+        <div
+          key={i}
+          ref={(el) => { barRefs.current[i] = el; }}
+          className="w-1.5 h-2 rounded-[1px] bg-slate-800"
+        />
+      );
+    }
+    return <div className="flex flex-col gap-0.5 p-1 bg-black/60 rounded border border-white/5">{bars}</div>;
+  }
+);
+
 export const MixerSection: React.FC<MixerSectionProps> = ({
   deckA,
   deckB,
   crossfader,
   crossfaderCurve,
   masterVolume,
-  meterLevels,
+  audioEngine,
   onUpdateDeckA,
   onUpdateDeckB,
   onCrossfaderChange,
   onCrossfaderCurveToggle,
   onMasterVolumeChange
 }) => {
-  // Render a vertical LED VU meter column
-  const renderVuMeter = (level: number, heightBars = 12) => {
-    const bars = [];
-    for (let i = heightBars - 1; i >= 0; i--) {
-      const threshold = i / heightBars;
-      const isActive = level >= threshold;
-      let colorClass = 'bg-slate-800';
-      if (isActive) {
-        if (i >= heightBars - 2) colorClass = 'bg-rose-500 led-glow-red';
-        else if (i >= heightBars - 4) colorClass = 'bg-amber-400 led-glow-amber';
-        else colorClass = 'bg-emerald-400 led-glow-green';
-      }
-      bars.push(
-        <div
-          key={i}
-          className={`w-1.5 h-2 rounded-[1px] transition-colors duration-75 ${colorClass}`}
-        />
-      );
-    }
-    return <div className="flex flex-col gap-0.5 p-1 bg-black/60 rounded border border-white/5">{bars}</div>;
-  };
+  // Stable getter refs passed to each meter column - each just reads live
+  // engine state on demand, so React never needs to re-render for this.
+  const getMaster = () => audioEngine.getMeterLevels().master;
+  const getMasterR = () => audioEngine.getMeterLevels().master * 0.95;
+  const getDeckA = () => audioEngine.getMeterLevels().deckA;
+  const getDeckB = () => audioEngine.getMeterLevels().deckB;
 
   return (
     <div className="w-full max-w-sm sm:max-w-md mx-auto bg-gradient-to-b from-[#181c26] via-[#10131a] to-[#0c0e14] rounded-xl border border-[#2b3346] shadow-bevel-out p-3 sm:p-4 flex flex-col justify-between">
@@ -83,8 +117,8 @@ export const MixerSection: React.FC<MixerSectionProps> = ({
             MASTER OUT L / R
           </span>
           <div className="flex items-center gap-1">
-            {renderVuMeter(meterLevels.master, 10)}
-            {renderVuMeter(meterLevels.master * 0.95, 10)}
+            <VuMeterColumn getLevel={getMaster} heightBars={10} />
+            <VuMeterColumn getLevel={getMasterR} heightBars={10} />
           </div>
         </div>
 
@@ -203,7 +237,7 @@ export const MixerSection: React.FC<MixerSectionProps> = ({
           {/* Vertical Channel Fader & Channel VU Meter */}
           <div className="flex items-center gap-3 w-full justify-center pt-2">
             {/* Channel VU Meter */}
-            {renderVuMeter(meterLevels.deckA, 12)}
+            <VuMeterColumn getLevel={getDeckA} heightBars={12} />
 
             {/* Tactile Vertical Slider */}
             <div className="relative flex flex-col items-center h-36">
@@ -369,7 +403,7 @@ export const MixerSection: React.FC<MixerSectionProps> = ({
           {/* Vertical Channel Fader & Channel VU Meter */}
           <div className="flex items-center gap-3 w-full justify-center pt-2">
             {/* Channel VU Meter */}
-            {renderVuMeter(meterLevels.deckB, 12)}
+            <VuMeterColumn getLevel={getDeckB} heightBars={12} />
 
             {/* Tactile Vertical Slider */}
             <div className="relative flex flex-col items-center h-36">

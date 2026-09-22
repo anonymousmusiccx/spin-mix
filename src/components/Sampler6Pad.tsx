@@ -17,7 +17,7 @@ interface Sampler6PadProps {
   onLoadCustomSample: (index: number, file: File) => void;
 }
 
-export const Sampler6Pad: React.FC<Sampler6PadProps> = ({
+const Sampler6PadComponent: React.FC<Sampler6PadProps> = ({
   pads,
   onTriggerPad,
   onStopPad,
@@ -154,3 +154,5 @@ export const Sampler6Pad: React.FC<Sampler6PadProps> = ({
     </div>
   );
 };
+
+export const Sampler6Pad = React.memo(Sampler6PadComponent);

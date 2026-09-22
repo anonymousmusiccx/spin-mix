@@ -26,7 +26,7 @@ interface DeckControlsProps {
   onExitLoop: () => void;
 }
 
-export const DeckControls: React.FC<DeckControlsProps> = ({
+const DeckControlsComponent: React.FC<DeckControlsProps> = ({
   deck,
   otherDeckBpm,
   deckColor,
@@ -367,3 +367,5 @@ export const DeckControls: React.FC<DeckControlsProps> = ({
     </div>
   );
 };
+
+export const DeckControls = React.memo(DeckControlsComponent);

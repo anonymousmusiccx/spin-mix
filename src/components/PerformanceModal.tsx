@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { DeckState, SamplerPad, FxConfig } from '../types';
+import { AudioEngine } from '../audio/audioEngine';
 import { MixerSection } from './MixerSection';
 import { DoubleFxUnit } from './DoubleFxUnit';
 import { Sampler6Pad } from './Sampler6Pad';
@@ -24,7 +25,7 @@ interface PerformanceModalProps {
   crossfader: number;
   crossfaderCurve: 'smooth' | 'sharp';
   masterVolume: number;
-  meterLevels: { master: number; deckA: number; deckB: number };
+  audioEngine: AudioEngine;
   onUpdateDeckA: (update: Partial<DeckState>) => void;
   onUpdateDeckB: (update: Partial<DeckState>) => void;
   onCrossfaderChange: (val: number) => void;
@@ -50,7 +51,7 @@ export const PerformanceModal: React.FC<PerformanceModalProps> = ({
   crossfader,
   crossfaderCurve,
   masterVolume,
-  meterLevels,
+  audioEngine,
   onUpdateDeckA,
   onUpdateDeckB,
   onCrossfaderChange,
@@ -137,7 +138,7 @@ export const PerformanceModal: React.FC<PerformanceModalProps> = ({
                 crossfader={crossfader}
                 crossfaderCurve={crossfaderCurve}
                 masterVolume={masterVolume}
-                meterLevels={meterLevels}
+                audioEngine={audioEngine}
                 onUpdateDeckA={update => onUpdateDeckA(update)}
                 onUpdateDeckB={update => onUpdateDeckB(update)}
                 onCrossfaderChange={onCrossfaderChange}

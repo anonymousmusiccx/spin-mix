@@ -16,7 +16,7 @@ interface JogWheel3DProps {
   onNudge: (delta: number) => void;
 }
 
-export const JogWheel3D: React.FC<JogWheel3DProps> = ({
+const JogWheel3DComponent: React.FC<JogWheel3DProps> = ({
   deck,
   deckColor,
   onScratchStart,
@@ -257,3 +257,5 @@ export const JogWheel3D: React.FC<JogWheel3DProps> = ({
     </div>
   );
 };
+
+export const JogWheel3D = React.memo(JogWheel3DComponent);

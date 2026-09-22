@@ -18,7 +18,7 @@ interface DoubleFxUnitProps {
   onUpdateFx2: (updates: Partial<FxState>) => void;
 }
 
-export const DoubleFxUnit: React.FC<DoubleFxUnitProps> = ({
+const DoubleFxUnitComponent: React.FC<DoubleFxUnitProps> = ({
   deckId,
   deckColor,
   fx1,
@@ -307,3 +307,5 @@ export const DoubleFxUnit: React.FC<DoubleFxUnitProps> = ({
     </div>
   );
 };
+
+export const DoubleFxUnit = React.memo(DoubleFxUnitComponent);

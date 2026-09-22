@@ -16,7 +16,7 @@ interface WaveformDisplayProps {
   onSeekB: (time: number) => void;
 }
 
-export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
+const WaveformDisplayComponent: React.FC<WaveformDisplayProps> = ({
   deckA,
   deckB,
   onSeekA,
@@ -665,3 +665,5 @@ export const WaveformDisplay: React.FC<WaveformDisplayProps> = ({
     </div>
   );
 };
+
+export const WaveformDisplay = React.memo(WaveformDisplayComponent);
