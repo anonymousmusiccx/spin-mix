@@ -41,6 +41,18 @@ jobs:
 
       - name: Add Android platform
         run: npx cap add android
+       
+      - name: Fix Kotlin stdlib conflict
+        run: |
+          cat >> android/build.gradle << 'EOF'
+
+          allprojects {
+              configurations.all {
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+                  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+              }
+          }
+          EOF
 
       - name: Copy web build into Android project
         run: npx cap copy android
