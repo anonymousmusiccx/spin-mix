@@ -1,0 +1,6 @@
+{
+  "name": "Spin Mix",
+  "description": "Professional modern Android-style DJ application with 3D tactile decks, double FX engine with lock/freeze, 6-pad custom sampler, scratch jog wheels, live recording, and real-time beatmatching waveforms.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

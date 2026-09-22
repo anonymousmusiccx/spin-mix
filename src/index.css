@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@layer utilities {
+  /* Carbon fiber & brushed metallic console texture */
+  .bg-carbon {
+    background-color: #0d0f15;
+    background-image: 
+      radial-gradient(#1e2230 15%, transparent 16%),
+      radial-gradient(#151822 15%, transparent 16%);
+    background-size: 8px 8px;
+    background-position: 0 0, 4px 4px;
+  }
+
+  .bg-brushed-metal {
+    background: linear-gradient(135deg, #1f2430 0%, #161922 50%, #252b3b 100%);
+  }
+
+  .bg-metal-chassis {
+    background: radial-gradient(circle at 50% 0%, #1d212d, #0d0e14);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 10px 30px rgba(0, 0, 0, 0.8);
+  }
+
+  /* 3D bevels & tactile shadows */
+  .shadow-bevel-out {
+    box-shadow: 
+      inset 0 1px 1px rgba(255, 255, 255, 0.15),
+      0 4px 10px rgba(0, 0, 0, 0.5),
+      0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+
+  .shadow-bevel-in {
+    box-shadow: 
+      inset 0 2px 5px rgba(0, 0, 0, 0.7),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.05),
+      0 1px 1px rgba(255, 255, 255, 0.05);
+  }
+
+  .shadow-tactile-btn {
+    box-shadow: 
+      inset 0 1px 2px rgba(255, 255, 255, 0.2),
+      0 3px 6px rgba(0, 0, 0, 0.5),
+      0 1px 0 #000;
+  }
+
+  .shadow-tactile-btn:active {
+    box-shadow: 
+      inset 0 3px 6px rgba(0, 0, 0, 0.6),
+      0 1px 2px rgba(0, 0, 0, 0.3);
+    transform: translateY(1px);
+  }
+
+  /* Realistic Vinyl Grooves */
+  .bg-vinyl-grooves {
+    background: repeating-radial-gradient(
+      circle at center,
+      #111317 0px,
+      #111317 2px,
+      #1a1d24 3px,
+      #111317 4px
+    );
+  }
+
+  .vinyl-reflection {
+    background: conic-gradient(
+      from 45deg at 50% 50%,
+      rgba(255, 255, 255, 0.12) 0deg,
+      transparent 60deg,
+      rgba(255, 255, 255, 0.08) 120deg,
+      transparent 180deg,
+      rgba(255, 255, 255, 0.12) 240deg,
+      transparent 300deg,
+      rgba(255, 255, 255, 0.08) 360deg
+    );
+  }
+
+  /* LED Glows */
+  .led-glow-cyan {
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.6), 0 0 2px rgba(6, 182, 212, 0.9);
+  }
+  .led-glow-amber {
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 2px rgba(245, 158, 11, 0.9);
+  }
+  .led-glow-green {
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.6), 0 0 2px rgba(16, 185, 129, 0.9);
+  }
+  .led-glow-red {
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.7), 0 0 2px rgba(239, 68, 68, 0.9);
+  }
+  .led-glow-magenta {
+    box-shadow: 0 0 12px rgba(217, 70, 239, 0.6), 0 0 2px rgba(217, 70, 239, 0.9);
+  }
+
+  /* Mobile Phone Rotation Utilities */
+  .forced-landscape {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    width: 100vh !important;
+    height: 100vw !important;
+    transform: translate(-50%, -50%) rotate(90deg) !important;
+    transform-origin: center center !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 40 !important;
+  }
+
+  .touch-none {
+    touch-action: none !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -webkit-touch-callout: none !important;
+  }
+
+  .safe-area-landscape {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+}
+
+/* Custom Scrollbar for track library */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d0f14;
+}
+::-webkit-scrollbar-thumb {
+  background: #252b3b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4459;
+}
