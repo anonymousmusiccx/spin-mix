@@ -115,6 +115,14 @@
     padding-left: max(0.75rem, env(safe-area-inset-left));
     padding-right: max(0.75rem, env(safe-area-inset-right));
   }
+
+  .safe-area-bottom {
+    padding-bottom: max(0.375rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
 }
 
 /* Custom Scrollbar for track library */
