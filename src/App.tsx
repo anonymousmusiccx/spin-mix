@@ -16,7 +16,6 @@ import { DoubleFxUnit } from './components/DoubleFxUnit';
 import { Sampler6Pad } from './components/Sampler6Pad';
 import { TrackLibraryModal } from './components/TrackLibraryModal';
 import { RecorderModal } from './components/RecorderModal';
-import { PerformanceModal, PerformanceTab } from './components/PerformanceModal';
 import { 
   Disc3, 
   Folder, 
@@ -110,7 +109,10 @@ export default function App() {
   const [crossfader, setCrossfader] = useState(0); // -1 to +1
   const [crossfaderCurve, setCrossfaderCurve] = useState<'smooth' | 'sharp'>('smooth');
   const [masterVolume, setMasterVolume] = useState(1.0);
-  const [meterLevels, setMeterLevels] = useState({ master: 0, deckA: 0, deckB: 0 });
+  // NOTE: VU meter levels are intentionally NOT React state. They update at 60fps,
+  // and putting them in state forced the entire component tree to re-render every
+  // single frame (even while idle/silent). MixerSection now polls the audio engine
+  // itself and paints the meters directly via refs, bypassing React entirely.
 
   // 6 Sampler Pads
   const [samplerPads, setSamplerPads] = useState<SamplerPad[]>([
@@ -127,11 +129,13 @@ export default function App() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordings, setRecordings] = useState<RecordingItem[]>([]);
 
-  // UI Drawer / Modal Toggles (Cross DJ Launcher Engine)
+  // UI Navigation (Persistent App-Shell Bottom Tab Bar, like Cross DJ / djay)
+  // Exactly one "screen" is visible at a time in the content area between the
+  // header and the bottom tab bar - nothing here ever requires page scrolling
+  // to reach FX, the sampler, or the mixer; they're a single tap away.
+  const [activeScreen, setActiveScreen] = useState<'decks' | 'mixer' | 'fx' | 'sampler'>('decks');
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isRecorderOpen, setIsRecorderOpen] = useState(false);
-  const [launchedModal, setLaunchedModal] = useState<PerformanceTab | null>(null);
-  const [activeBottomTab, setActiveBottomTab] = useState<'fx' | 'sampler' | 'both'>('both');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Mobile Orientation & Phone DJing Controls
@@ -239,10 +243,6 @@ export default function App() {
     let animId: number;
 
     const updateTelemetry = () => {
-      // Meters
-      const levels = audioEngine.getMeterLevels();
-      setMeterLevels(levels);
-
       // Deck A progress
       const curA = audioEngine.getDeckCurrentTime('A');
       setDeckA((prev) => {
@@ -672,69 +672,53 @@ export default function App() {
   const isLandscapeMode = !isPortrait || forceLandscape;
 
   return (
-    <div className={`min-h-screen bg-carbon text-slate-100 flex flex-col justify-between selection:bg-cyan-500 selection:text-black safe-area-landscape ${forceLandscape ? 'forced-landscape' : ''}`}>
-      {/* Top Professional DJ Header Console Bar */}
-      <header className="bg-gradient-to-b from-[#141824] via-[#0f121a] to-[#0a0d13] border-b border-[#252c3e] px-2.5 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between shadow-2xl z-20">
-        {/* Brand Logo & Telemetry */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 via-indigo-600 to-amber-500 p-0.5 shadow-bevel-out flex items-center justify-center">
-              <Disc3 className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '6s' }} />
-            </div>
-            <div>
-              <h1 className="font-['Chakra_Petch'] text-lg sm:text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-amber-400 drop-shadow">
-                SPIN MIX
-              </h1>
-              <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 led-glow-green" />
-                <span>3D PRO ANDROID DJ CONSOLE</span>
-              </div>
+    <div className={`h-[100dvh] w-full bg-carbon text-slate-100 flex flex-col overflow-hidden selection:bg-cyan-500 selection:text-black safe-area-landscape ${forceLandscape ? 'forced-landscape' : ''}`}>
+      {/* Compact App Header - logo + cross-screen quick actions only.
+          Everything else (Mixer/FX/Sampler/Library) lives behind the bottom
+          tab bar below, never behind scrolling. */}
+      <header className="shrink-0 safe-area-top bg-gradient-to-b from-[#141824] via-[#0f121a] to-[#0a0d13] border-b border-[#252c3e] px-2.5 sm:px-6 py-2 flex items-center justify-between shadow-2xl z-20">
+        {/* Brand Logo */}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-tr from-cyan-600 via-indigo-600 to-amber-500 p-0.5 shadow-bevel-out flex items-center justify-center flex-shrink-0">
+            <Disc3 className="w-4 h-4 sm:w-5 sm:h-5 text-white animate-spin" style={{ animationDuration: '6s' }} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-['Chakra_Petch'] text-sm sm:text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-amber-400 drop-shadow truncate">
+              SPIN MIX
+            </h1>
+            <div className="hidden sm:flex items-center gap-1.5 text-[9px] font-mono text-slate-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 led-glow-green" />
+              <span>3D PRO ANDROID DJ CONSOLE</span>
             </div>
           </div>
         </div>
 
-        {/* Master Live Controls, Record Indicator & Drawers */}
-        <div className="flex items-center gap-1.5 sm:gap-3">
-          {/* Mobile Screen Rotate Orientation Toggle Button */}
+        {/* Cross-Screen Quick Actions */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* Mobile Screen Rotate Orientation Toggle */}
           <button
             onClick={handleToggleRotate}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-['Chakra_Petch'] font-black flex items-center gap-1.5 transition-all shadow-tactile-btn border ${
+            className={`p-2 rounded-lg transition-all shadow-tactile-btn border ${
               forceLandscape
                 ? 'bg-amber-500 text-black border-amber-300 led-glow-amber'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-white'
             }`}
             title={forceLandscape ? 'Reset to normal portrait view' : 'Rotate phone screen into horizontal landscape DJ console'}
           >
-            <Smartphone className={`w-3.5 h-3.5 ${forceLandscape || !isPortrait ? 'rotate-90 text-black' : 'text-amber-400'}`} />
-            <span className="hidden xs:inline">
-              {forceLandscape ? 'PORTRAIT' : 'ROTATE'}
-            </span>
+            <Smartphone className={`w-4 h-4 ${forceLandscape || !isPortrait ? 'rotate-90' : 'text-amber-400'}`} />
           </button>
 
-          {/* Live Recording Trigger Pill */}
+          {/* Live Recording Toggle */}
           <button
             onClick={() => setIsRecorderOpen(true)}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-['Chakra_Petch'] text-xs font-black uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 border transition-all shadow-tactile-btn ${
+            className={`p-2 rounded-lg border transition-all shadow-tactile-btn relative ${
               isRecording
                 ? 'bg-rose-600 text-white border-rose-400 led-glow-red animate-pulse'
                 : 'bg-slate-900/90 text-slate-300 border-white/10 hover:border-rose-500/50 hover:text-white'
             }`}
+            title={isRecording ? `Recording live - ${Math.floor(recordingDuration / 60)}:${(recordingDuration % 60).toString().padStart(2, '0')}` : 'Record set'}
           >
-            <Circle className={`w-3.5 h-3.5 ${isRecording ? 'fill-white animate-ping' : 'fill-rose-500 text-rose-500'}`} />
-            <span className="hidden sm:inline">{isRecording ? `REC LIVE [${Math.floor(recordingDuration / 60)}:${(recordingDuration % 60).toString().padStart(2, '0')}]` : 'RECORD SET'}</span>
-            <span className="sm:hidden">{isRecording ? 'REC' : 'REC'}</span>
-          </button>
-
-          {/* Local Tracks Library Toggle */}
-          <button
-            onClick={() => setIsLibraryOpen(true)}
-            className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 border border-slate-700 shadow-tactile-btn text-xs font-['Chakra_Petch'] font-black flex items-center gap-1.5 transition-all"
-          >
-            <Folder className="w-4 h-4 text-cyan-400" />
-            <span className="hidden sm:inline">TRACK LIBRARY</span>
-            <span className="bg-cyan-950 text-cyan-300 text-[10px] px-1.5 py-0.2 rounded border border-cyan-500/30">
-              {tracks.length}
-            </span>
+            <Circle className={`w-4 h-4 ${isRecording ? 'fill-white animate-ping' : 'fill-rose-500 text-rose-500'}`} />
           </button>
 
           {/* Fullscreen Button */}
@@ -748,146 +732,73 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main DJ Console Stage */}
-      <main className="flex-1 flex flex-col gap-3 p-2 sm:p-4 max-w-[1700px] w-full mx-auto">
-        {/* Mobile Portrait Orientation Prompt */}
-        {!isLandscapeMode && (
-          <div className="bg-gradient-to-r from-cyan-950/80 via-slate-900/90 to-amber-950/80 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between gap-2 shadow-bevel-out">
-            <div className="flex items-center gap-2 min-w-0">
-              <Smartphone className="w-4 h-4 text-amber-400 rotate-90 animate-pulse flex-shrink-0" />
-              <span className="text-[11px] sm:text-xs text-slate-300 font-['Chakra_Petch'] font-bold truncate">
-                Rotate phone to Landscape for 2-deck full mixer view
-              </span>
-            </div>
-            <button
-              onClick={handleToggleRotate}
-              className="px-2.5 py-1 text-[11px] font-black font-['Chakra_Petch'] rounded-lg bg-amber-500 hover:bg-amber-400 text-black shadow-tactile-btn uppercase tracking-wider flex-shrink-0 flex items-center gap-1"
-            >
-              <RotateCcw className="w-3 h-3 text-black" />
-              ROTATE
-            </button>
-          </div>
-        )}
-
-        {/* Dual Stacked Multi-Band Waveform Display */}
+      {/* Persistent Waveform Strip - visible on every screen (Decks, Mixer,
+          FX, Sampler), matching the always-on-top waveform pattern in
+          Cross DJ / djay. Never hidden behind a tab switch. */}
+      <div className="shrink-0 px-2 sm:px-3 pt-2">
         <WaveformDisplay
           deckA={deckA}
           deckB={deckB}
           onSeekA={(t) => audioEngine.seekDeck('A', t)}
           onSeekB={(t) => audioEngine.seekDeck('B', t)}
         />
+      </div>
 
-        {/* CROSS DJ PERFORMANCE LAUNCH BAR */}
-        <div className="bg-gradient-to-r from-[#141825] via-[#10141d] to-[#141825] border border-white/10 rounded-xl p-1.5 sm:p-2 flex items-center justify-between gap-1.5 shadow-bevel-out">
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto w-full py-0.5">
-            {/* Launch MIXER */}
-            <button
-              id="btn-launch-mixer"
-              onClick={() => setLaunchedModal('mixer')}
-              className={`flex-1 min-w-[85px] py-2 px-2 rounded-lg text-xs font-['Chakra_Petch'] font-black flex items-center justify-center gap-1.5 border shadow-tactile-btn transition-all active:scale-95 ${
-                launchedModal === 'mixer'
-                  ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white border-cyan-400 led-glow-cyan'
-                  : 'bg-slate-800/90 text-slate-200 border-slate-700 hover:border-cyan-500/50 hover:text-white'
-              }`}
-              title="Launch 2-Channel Mixer (3-Band EQs, Filters, Gain Trim, Crossfader Curve, Routing)"
-            >
-              <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="truncate">MIXER</span>
-            </button>
+      {/* Main Content Area - fills exactly the space between header and the
+          bottom tab bar below. Only ONE screen renders at a time; switching
+          screens is instant (no navigation stack, no page scroll to "find"
+          FX/Sampler/Mixer - they're one tap away on the tab bar). */}
+      <main className="flex-1 min-h-0 overflow-hidden relative">
+        {activeScreen === 'decks' && (
+          <div className="h-full w-full flex flex-col gap-2 p-2 sm:p-3 max-w-[1700px] mx-auto overflow-y-auto">
+            {/* Mobile Portrait Orientation Prompt */}
+            {!isLandscapeMode && (
+              <div className="bg-gradient-to-r from-cyan-950/80 via-slate-900/90 to-amber-950/80 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between gap-2 shadow-bevel-out flex-shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Smartphone className="w-4 h-4 text-amber-400 rotate-90 animate-pulse flex-shrink-0" />
+                  <span className="text-[11px] sm:text-xs text-slate-300 font-['Chakra_Petch'] font-bold truncate">
+                    Rotate phone to Landscape for 2-deck full mixer view
+                  </span>
+                </div>
+                <button
+                  onClick={handleToggleRotate}
+                  className="px-2.5 py-1 text-[11px] font-black font-['Chakra_Petch'] rounded-lg bg-amber-500 hover:bg-amber-400 text-black shadow-tactile-btn uppercase tracking-wider flex-shrink-0 flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3 text-black" />
+                  ROTATE
+                </button>
+              </div>
+            )}
 
-            {/* Launch DOUBLE FX */}
-            <button
-              id="btn-launch-fx"
-              onClick={() => setLaunchedModal('fx')}
-              className={`flex-1 min-w-[95px] py-2 px-2 rounded-lg text-xs font-['Chakra_Petch'] font-black flex items-center justify-center gap-1.5 border shadow-tactile-btn transition-all active:scale-95 ${
-                launchedModal === 'fx'
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-purple-400 led-glow-magenta'
-                  : 'bg-slate-800/90 text-slate-200 border-slate-700 hover:border-purple-500/50 hover:text-white'
-              }`}
-              title="Launch Double FX Rack (10 Studio FX, Kaoss Touchpads, FX Lock/Freeze)"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-              <span className="truncate">DOUBLE FX</span>
-              {(deckA.fx1.active || deckA.fx2.active || deckB.fx1.active || deckB.fx2.active) && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 led-glow-green animate-ping" />
-              )}
-            </button>
-
-            {/* Launch SAMPLER */}
-            <button
-              id="btn-launch-sampler"
-              onClick={() => setLaunchedModal('sampler')}
-              className={`flex-1 min-w-[90px] py-2 px-2 rounded-lg text-xs font-['Chakra_Petch'] font-black flex items-center justify-center gap-1.5 border shadow-tactile-btn transition-all active:scale-95 ${
-                launchedModal === 'sampler'
-                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border-amber-400 led-glow-amber'
-                  : 'bg-slate-800/90 text-slate-200 border-slate-700 hover:border-amber-500/50 hover:text-white'
-              }`}
-              title="Launch 6-Pad Performance Sampler with custom MP3 loading"
-            >
-              <Grid className="w-3.5 h-3.5 text-amber-400" />
-              <span className="truncate">SAMPLER</span>
-            </button>
-
-            {/* Launch LIBRARY */}
-            <button
-              id="btn-launch-library"
-              onClick={() => setIsLibraryOpen(true)}
-              className="flex-1 min-w-[85px] py-2 px-2 rounded-lg text-xs font-['Chakra_Petch'] font-black flex items-center justify-center gap-1.5 border shadow-tactile-btn transition-all bg-slate-800/90 text-slate-200 border-slate-700 hover:border-cyan-500/50 hover:text-white active:scale-95"
-              title="Browse and load local audio tracks"
-            >
-              <Folder className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="truncate">LIBRARY</span>
-              <span className="bg-cyan-950 text-cyan-300 text-[10px] px-1 rounded border border-cyan-500/30">
-                {tracks.length}
-              </span>
-            </button>
-
-            {/* Launch RECORDER */}
-            <button
-              id="btn-launch-recorder"
-              onClick={() => setIsRecorderOpen(true)}
-              className={`flex-1 min-w-[85px] py-2 px-2 rounded-lg text-xs font-['Chakra_Petch'] font-black flex items-center justify-center gap-1.5 border shadow-tactile-btn transition-all active:scale-95 ${
-                isRecording
-                  ? 'bg-rose-600 text-white border-rose-400 led-glow-red animate-pulse'
-                  : 'bg-slate-800/90 text-slate-200 border-slate-700 hover:border-rose-500/50 hover:text-white'
-              }`}
-              title="Record Master Mix Live to Device Storage"
-            >
-              <Circle className={`w-3.5 h-3.5 ${isRecording ? 'fill-white animate-ping' : 'fill-rose-500 text-rose-500'}`} />
-              <span className="truncate">{isRecording ? 'REC LIVE' : 'RECORD'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Phone Deck Focus Switcher (When in Portrait Mode) */}
-        {!isLandscapeMode && (
-          <div className="flex items-center justify-between bg-[#11141e] p-1 rounded-xl border border-white/5 text-[11px] font-['Chakra_Petch'] font-bold gap-1">
-            <button
-              onClick={() => setPhoneDeckView('dual')}
-              className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
-                phoneDeckView === 'dual' ? 'bg-slate-700 text-white border border-white/20' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              DUAL DECKS
-            </button>
-            <button
-              onClick={() => setPhoneDeckView('deckA')}
-              className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
-                phoneDeckView === 'deckA' ? 'bg-cyan-600 text-black font-black led-glow-cyan' : 'text-cyan-400 hover:text-cyan-300'
-              }`}
-            >
-              DECK A FOCUS
-            </button>
-            <button
-              onClick={() => setPhoneDeckView('deckB')}
-              className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
-                phoneDeckView === 'deckB' ? 'bg-amber-600 text-black font-black led-glow-amber' : 'text-amber-400 hover:text-amber-300'
-              }`}
-            >
-              DECK B FOCUS
-            </button>
-          </div>
-        )}
+            {/* Mobile Phone Deck Focus Switcher (Portrait Mode) */}
+            {!isLandscapeMode && (
+              <div className="flex items-center justify-between bg-[#11141e] p-1 rounded-xl border border-white/5 text-[11px] font-['Chakra_Petch'] font-bold gap-1 flex-shrink-0">
+                <button
+                  onClick={() => setPhoneDeckView('dual')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                    phoneDeckView === 'dual' ? 'bg-slate-700 text-white border border-white/20' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  DUAL DECKS
+                </button>
+                <button
+                  onClick={() => setPhoneDeckView('deckA')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                    phoneDeckView === 'deckA' ? 'bg-cyan-600 text-black font-black led-glow-cyan' : 'text-cyan-400 hover:text-cyan-300'
+                  }`}
+                >
+                  DECK A FOCUS
+                </button>
+                <button
+                  onClick={() => setPhoneDeckView('deckB')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                    phoneDeckView === 'deckB' ? 'bg-amber-600 text-black font-black led-glow-amber' : 'text-amber-400 hover:text-amber-300'
+                  }`}
+                >
+                  DECK B FOCUS
+                </button>
+              </div>
+            )}
 
         {/* Center Performance Cockpit: Deck A | (Mixer) | Deck B */}
         <div className={`grid gap-3 items-start ${isLandscapeMode ? 'grid-cols-12' : 'grid-cols-1'}`}>
@@ -951,7 +862,7 @@ export default function App() {
                 crossfader={crossfader}
                 crossfaderCurve={crossfaderCurve}
                 masterVolume={masterVolume}
-                meterLevels={meterLevels}
+                audioEngine={audioEngine}
                 onUpdateDeckA={updateDeckA}
                 onUpdateDeckB={updateDeckB}
                 onCrossfaderChange={handleCrossfader}
@@ -1012,31 +923,83 @@ export default function App() {
             </div>
           )}
         </div>
+          </div>
+        )}
 
-        {/* MAIN SCREEN HARDWARE CROSSFADER DOCK (Accessible at all times) */}
-        <div className="bg-[#10131d] border border-white/10 rounded-2xl p-3 shadow-bevel-out flex flex-col gap-2">
-          <div className="flex items-center justify-between text-[11px] font-['Chakra_Petch'] font-bold text-slate-400 px-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-cyan-400 font-black">DECK A</span>
-              <span className="text-[10px] font-mono bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-500/30 text-cyan-300">
-                ROUTE: {deckA.crossfaderRouting}
-              </span>
+        {/* MIXER SCREEN - full 2-channel strip, reached via the bottom tab bar */}
+        {activeScreen === 'mixer' && (
+          <div className="h-full w-full overflow-y-auto p-3 flex items-start justify-center">
+            <MixerSection
+              deckA={deckA}
+              deckB={deckB}
+              crossfader={crossfader}
+              crossfaderCurve={crossfaderCurve}
+              masterVolume={masterVolume}
+              audioEngine={audioEngine}
+              onUpdateDeckA={updateDeckA}
+              onUpdateDeckB={updateDeckB}
+              onCrossfaderChange={handleCrossfader}
+              onCrossfaderCurveToggle={handleCrossfaderCurveToggle}
+              onMasterVolumeChange={handleMasterVolume}
+            />
+          </div>
+        )}
+
+        {/* DOUBLE FX SCREEN - reached via the bottom tab bar */}
+        {activeScreen === 'fx' && (
+          <div className="h-full w-full overflow-y-auto p-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-4xl mx-auto">
+              <DoubleFxUnit
+                deckId="A"
+                deckColor="cyan"
+                fx1={deckA.fx1}
+                fx2={deckA.fx2}
+                onUpdateFx1={(u) => handleUpdateFx('A', 1, u)}
+                onUpdateFx2={(u) => handleUpdateFx('A', 2, u)}
+              />
+              <DoubleFxUnit
+                deckId="B"
+                deckColor="amber"
+                fx1={deckB.fx1}
+                fx2={deckB.fx2}
+                onUpdateFx1={(u) => handleUpdateFx('B', 1, u)}
+                onUpdateFx2={(u) => handleUpdateFx('B', 2, u)}
+              />
             </div>
+          </div>
+        )}
 
-            <button
-              onClick={() => setLaunchedModal('mixer')}
-              className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-950/60 hover:bg-cyan-900/60 px-2.5 py-1 rounded-lg border border-cyan-500/30 transition-all shadow-tactile-btn active:scale-95"
-              title="Launch Full 2-Channel Mixer with 3-Band EQs, Filters & Gain Trim"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>LAUNCH FULL MIXER EQ</span>
-            </button>
+        {/* SAMPLER SCREEN - reached via the bottom tab bar */}
+        {activeScreen === 'sampler' && (
+          <div className="h-full w-full overflow-y-auto p-3 flex items-start justify-center">
+            <div className="w-full max-w-2xl">
+              <Sampler6Pad
+                pads={samplerPads}
+                onTriggerPad={handleTriggerSamplerPad}
+                onStopPad={handleStopSamplerPad}
+                onUpdatePad={handleUpdateSamplerPad}
+                onLoadCustomSample={handleLoadCustomSample}
+              />
+            </div>
+          </div>
+        )}
+      </main>
 
+      {/* Persistent Crossfader Dock - visible on every screen, just like the
+          always-on-top CUE/PLAY/SYNC/crossfader transport strip in Cross DJ
+          / djay. This is the one control you always need reachable, mid-mix,
+          no matter which panel (FX/Sampler/Mixer) you're looking at. */}
+      <div className="shrink-0 px-2 sm:px-3 pb-1.5">
+        <div className="bg-[#10131d] border border-white/10 rounded-2xl p-2.5 shadow-bevel-out flex flex-col gap-1.5">
+          <div className="flex items-center justify-between text-[10px] font-['Chakra_Petch'] font-bold text-slate-400 px-1">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-mono bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-300">
-                ROUTE: {deckB.crossfaderRouting}
-              </span>
-              <span className="text-amber-400 font-black">DECK B</span>
+              <span className="text-cyan-400 font-black">A</span>
+              <span className="font-mono text-slate-500">{deckA.bpm.toFixed(1)} BPM</span>
+            </div>
+            <span className="text-slate-600">CROSSFADER</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-slate-500">{deckB.bpm.toFixed(1)} BPM</span>
+              <span className="text-amber-400 font-black">B</span>
             </div>
           </div>
 
@@ -1102,134 +1065,74 @@ export default function App() {
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Lower Performance Deck: Double FX Units & 6-Pad Sampler (Only inline when in Landscape mode) */}
-        {isLandscapeMode && (
-          <div className="flex flex-col gap-3 mt-1">
-            {/* Section View Selector Bar */}
-            <div className="flex items-center justify-between bg-[#11141e] px-4 py-2 rounded-xl border border-white/5">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-['Chakra_Petch'] font-bold text-slate-400 uppercase">
-                  PERFORMANCE UNITS:
-                </span>
-                <button
-                  onClick={() => setActiveBottomTab('both')}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                    activeBottomTab === 'both'
-                      ? 'bg-slate-700 text-white border border-white/20'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  DUAL VIEW (FX + SAMPLER)
-                </button>
-                <button
-                  onClick={() => setActiveBottomTab('fx')}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                    activeBottomTab === 'fx'
-                      ? 'bg-slate-700 text-white border border-white/20'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  DOUBLE FX ONLY
-                </button>
-                <button
-                  onClick={() => setActiveBottomTab('sampler')}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                    activeBottomTab === 'sampler'
-                      ? 'bg-slate-700 text-white border border-white/20'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  6-PAD SAMPLER ONLY
-                </button>
-              </div>
+      {/* PERSISTENT BOTTOM TAB BAR - the single, consistent way to reach every
+          screen (Decks/Mixer/FX/Sampler/Library), Android Material style.
+          Always visible, always in the same place, never behind a scroll. */}
+      <nav className="shrink-0 bg-gradient-to-t from-[#0a0c12] via-[#0d0f17] to-[#10131d] border-t border-[#252c3e] px-1.5 py-1.5 flex items-stretch gap-1 shadow-2xl z-20 safe-area-bottom">
+        <button
+          onClick={() => setActiveScreen('decks')}
+          className={`flex-1 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+            activeScreen === 'decks'
+              ? 'bg-gradient-to-b from-cyan-600 to-indigo-600 text-white led-glow-cyan'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Disc3 className="w-5 h-5" />
+          <span className="text-[9px] font-['Chakra_Petch'] font-black uppercase">Decks</span>
+        </button>
 
-              <div className="text-[11px] text-slate-500 font-mono hidden sm:inline">
-                LOW-LATENCY DSP • REAL-TIME HARDWARE ACCELERATED
-              </div>
-            </div>
+        <button
+          onClick={() => setActiveScreen('mixer')}
+          className={`flex-1 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+            activeScreen === 'mixer'
+              ? 'bg-gradient-to-b from-cyan-600 to-indigo-600 text-white led-glow-cyan'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Sliders className="w-5 h-5" />
+          <span className="text-[9px] font-['Chakra_Petch'] font-black uppercase">Mixer</span>
+        </button>
 
-            {/* Double FX Units (Deck A & Deck B) */}
-            {(activeBottomTab === 'both' || activeBottomTab === 'fx') && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Deck A Double FX */}
-                <DoubleFxUnit
-                  deckId="A"
-                  deckColor="cyan"
-                  fx1={deckA.fx1}
-                  fx2={deckA.fx2}
-                  onUpdateFx1={(u) => handleUpdateFx('A', 1, u)}
-                  onUpdateFx2={(u) => handleUpdateFx('A', 2, u)}
-                />
+        <button
+          onClick={() => setActiveScreen('fx')}
+          className={`flex-1 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all relative ${
+            activeScreen === 'fx'
+              ? 'bg-gradient-to-b from-purple-600 to-pink-600 text-white led-glow-magenta'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[9px] font-['Chakra_Petch'] font-black uppercase">FX</span>
+          {(deckA.fx1.active || deckA.fx2.active || deckB.fx1.active || deckB.fx2.active) && (
+            <span className="absolute top-1 right-1/4 w-1.5 h-1.5 rounded-full bg-emerald-400 led-glow-green animate-ping" />
+          )}
+        </button>
 
-                {/* Deck B Double FX */}
-                <DoubleFxUnit
-                  deckId="B"
-                  deckColor="amber"
-                  fx1={deckB.fx1}
-                  fx2={deckB.fx2}
-                  onUpdateFx1={(u) => handleUpdateFx('B', 1, u)}
-                  onUpdateFx2={(u) => handleUpdateFx('B', 2, u)}
-                />
-              </div>
-            )}
+        <button
+          onClick={() => setActiveScreen('sampler')}
+          className={`flex-1 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+            activeScreen === 'sampler'
+              ? 'bg-gradient-to-b from-amber-600 to-orange-600 text-white led-glow-amber'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Grid className="w-5 h-5" />
+          <span className="text-[9px] font-['Chakra_Petch'] font-black uppercase">Sampler</span>
+        </button>
 
-            {/* 6-Pad Performance Sampler */}
-            {(activeBottomTab === 'both' || activeBottomTab === 'sampler') && (
-              <Sampler6Pad
-                pads={samplerPads}
-                onTriggerPad={handleTriggerSamplerPad}
-                onStopPad={handleStopSamplerPad}
-                onUpdatePad={handleUpdateSamplerPad}
-                onLoadCustomSample={handleLoadCustomSample}
-              />
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* Footer Status Bar */}
-      <footer className="bg-[#0b0e14] border-t border-[#1d2331] px-4 py-2 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
-        <div className="flex items-center gap-2">
-          <span className="font-['Chakra_Petch'] font-bold text-slate-400">SPIN MIX PRO</span>
-          <span>•</span>
-          <span>Dual Scratch Decks</span>
-          <span>•</span>
-          <span>10 DSP Effects</span>
-          <span>•</span>
-          <span>Custom MP3 Sampler</span>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-[11px]">
-          <span>AUDIO ENGINE: {audioEngine.ctx?.state?.toUpperCase() || 'STANDBY'}</span>
-          <span>•</span>
-          <span>LATENCY: &lt;5ms</span>
-        </div>
-      </footer>
-
-      {/* Performance Modal (Cross DJ Interactive Launcher Overlay for Mixer, FX, and Sampler) */}
-      <PerformanceModal
-        isOpen={launchedModal !== null}
-        activeTab={launchedModal || 'mixer'}
-        onTabChange={(tab) => setLaunchedModal(tab)}
-        onClose={() => setLaunchedModal(null)}
-        deckA={deckA}
-        deckB={deckB}
-        crossfader={crossfader}
-        crossfaderCurve={crossfaderCurve}
-        masterVolume={masterVolume}
-        meterLevels={meterLevels}
-        onUpdateDeckA={updateDeckA}
-        onUpdateDeckB={updateDeckB}
-        onCrossfaderChange={handleCrossfader}
-        onCrossfaderCurveToggle={handleCrossfaderCurveToggle}
-        onMasterVolumeChange={handleMasterVolume}
-        onUpdateFx={handleUpdateFx}
-        samplerPads={samplerPads}
-        onTriggerSamplerPad={handleTriggerSamplerPad}
-        onStopSamplerPad={handleStopSamplerPad}
-        onUpdateSamplerPad={handleUpdateSamplerPad}
-        onLoadCustomSample={handleLoadCustomSample}
-      />
+        <button
+          onClick={() => setIsLibraryOpen(true)}
+          className="flex-1 py-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all text-slate-400 hover:text-white relative"
+        >
+          <Folder className="w-5 h-5" />
+          <span className="text-[9px] font-['Chakra_Petch'] font-black uppercase">Library</span>
+          <span className="absolute -top-0.5 right-1/4 bg-cyan-950 text-cyan-300 text-[8px] px-1 rounded-full border border-cyan-500/30 leading-tight">
+            {tracks.length}
+          </span>
+        </button>
+      </nav>
 
       {/* Local Track Library Modal */}
       <TrackLibraryModal
