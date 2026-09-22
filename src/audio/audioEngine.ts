@@ -670,25 +670,36 @@ export class AudioEngine {
     this.masterGain.gain.setValueAtTime(v, this.ctx.currentTime);
   }
 
+  // Reused scratch buffers so the 60fps meter poll doesn't allocate + GC every frame
+  private meterBufMaster: Uint8Array | null = null;
+  private meterBufA: Uint8Array | null = null;
+  private meterBufB: Uint8Array | null = null;
+
+  private getLevelReused(analyser: AnalyserNode | null, cacheKey: 'master' | 'A' | 'B'): number {
+    if (!analyser) return 0;
+    let buf = cacheKey === 'master' ? this.meterBufMaster : cacheKey === 'A' ? this.meterBufA : this.meterBufB;
+    if (!buf || buf.length !== analyser.frequencyBinCount) {
+      buf = new Uint8Array(analyser.frequencyBinCount);
+      if (cacheKey === 'master') this.meterBufMaster = buf;
+      else if (cacheKey === 'A') this.meterBufA = buf;
+      else this.meterBufB = buf;
+    }
+    analyser.getByteFrequencyData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+      sum += buf[i];
+    }
+    const avg = sum / buf.length;
+    return Math.min(1.0, avg / 128);
+  }
+
   public getMeterLevels(): { master: number; deckA: number; deckB: number } {
     if (!this.ctx) return { master: 0, deckA: 0, deckB: 0 };
 
-    const getLevel = (analyser: AnalyserNode | null): number => {
-      if (!analyser) return 0;
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      analyser.getByteFrequencyData(data);
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) {
-        sum += data[i];
-      }
-      const avg = sum / data.length;
-      return Math.min(1.0, avg / 128);
-    };
-
     return {
-      master: getLevel(this.masterAnalyser),
-      deckA: getLevel(this.deckA?.analyser ?? null),
-      deckB: getLevel(this.deckB?.analyser ?? null)
+      master: this.getLevelReused(this.masterAnalyser, 'master'),
+      deckA: this.getLevelReused(this.deckA?.analyser ?? null, 'A'),
+      deckB: this.getLevelReused(this.deckB?.analyser ?? null, 'B')
     };
   }
 
