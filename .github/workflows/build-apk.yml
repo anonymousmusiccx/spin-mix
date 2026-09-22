@@ -27,7 +27,7 @@ jobs:
           NODE_ENV: production
 
       - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
 
       - name: Init Capacitor project
         run: npx cap init "Spin Mix" "com.anonymousmusiccx.spinmix" --web-dir dist
