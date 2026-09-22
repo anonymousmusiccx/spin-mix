@@ -1,0 +1,58 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install web app dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+        env:
+          # If .env.example lists keys (e.g. GEMINI_API_KEY), add them as
+          # repo secrets (Settings > Secrets and variables > Actions) and
+          # reference them here, e.g.:
+          # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NODE_ENV: production
+
+      - name: Install Capacitor
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: Init Capacitor project
+        run: npx cap init "Spin Mix" "com.anonymousmusiccx.spinmix" --web-dir dist
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Copy web build into Android project
+        run: npx cap copy android
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: spin-mix-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
