@@ -1,0 +1,27 @@
+ext {
+    if (!project.hasProperty('minSdkVersion')) minSdkVersion = rootProject.ext.minSdkVersion
+    if (!project.hasProperty('compileSdkVersion')) compileSdkVersion = rootProject.ext.compileSdkVersion
+    if (!project.hasProperty('targetSdkVersion')) targetSdkVersion = rootProject.ext.targetSdkVersion
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace "com.spinmix.audioscanner"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation project(':capacitor-android')
+}
