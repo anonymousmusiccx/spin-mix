@@ -1,3 +1,4 @@
+cat > package.json << 'EOF'
 {
   "name": "react-example",
   "private": true,
@@ -38,3 +39,4 @@
     "@types/express": "^4.17.21"
   }
 }
+EOF
