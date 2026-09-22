@@ -16,7 +16,8 @@ export const FX_LIST = [
   { type: 'roll' as FxType, name: 'Beat Roll', category: 'Beat', param1Label: 'Division', param2Label: 'Stutter', defaultWet: 0.8, defaultParam1: 0.5, defaultParam2: 0.7 },
   { type: 'distortion' as FxType, name: 'Tube Drive', category: 'Color', param1Label: 'Drive', param2Label: 'Warmth', defaultWet: 0.5, defaultParam1: 0.6, defaultParam2: 0.5 },
   { type: 'tremolo' as FxType, name: 'Auto-Gate', category: 'Rhythm', param1Label: 'Rate', param2Label: 'Shape', defaultWet: 0.7, defaultParam1: 0.5, defaultParam2: 0.8 },
-  { type: 'pitch_shift' as FxType, name: 'Vinyl Brake', category: 'Pitch', param1Label: 'Bend', param2Label: 'Decay', defaultWet: 0.75, defaultParam1: 0.5, defaultParam2: 0.5 }
+  { type: 'pitch_shift' as FxType, name: 'Vinyl Brake', category: 'Pitch', param1Label: 'Bend', param2Label: 'Decay', defaultWet: 0.75, defaultParam1: 0.5, defaultParam2: 0.5 },
+  { type: 'backspin' as FxType, name: 'Vinyl Backspin', category: 'Turntable', param1Label: 'Speed', param2Label: 'Length', defaultWet: 0.85, defaultParam1: 0.7, defaultParam2: 0.5 }
 ];
 
 interface DeckAudioNodes {
@@ -46,6 +47,8 @@ interface DeckAudioNodes {
   rate: number;
   isScratching: boolean;
   scratchBuffer?: AudioBufferSourceNode | null;
+  isBackspinning?: boolean;
+  backspinSource?: AudioBufferSourceNode | null;
 }
 
 export class AudioEngine {
@@ -497,6 +500,91 @@ export class AudioEngine {
     }
   }
 
+  // --- Real-time Turntable Vinyl Backspin FX ---
+
+  public triggerBackspin(deckId: 'A' | 'B', speed = 0.7, length = 0.5): void {
+    if (!this.ctx) return;
+    const deck = deckId === 'A' ? this.deckA : this.deckB;
+    if (!deck || !deck.buffer || deck.isBackspinning) return;
+
+    deck.isBackspinning = true;
+    const wasPlaying = deck.isPlaying;
+    const curTime = this.getDeckCurrentTime(deckId);
+
+    // Duration of audio slice to spin backwards (from 1.0s to 3.5s)
+    const sliceDuration = Math.max(0.4, Math.min(curTime, 1.0 + length * 2.5));
+    if (sliceDuration < 0.2) {
+      deck.isBackspinning = false;
+      return;
+    }
+
+    // Real-time duration of backspin sound (0.45s to 1.6s)
+    const spinDuration = 0.45 + length * 1.1;
+    const sampleRate = deck.buffer.sampleRate;
+    const numSamples = Math.floor(sliceDuration * sampleRate);
+    const channels = deck.buffer.numberOfChannels;
+    const reversedBuffer = this.ctx.createBuffer(channels, numSamples, sampleRate);
+
+    const startSample = Math.floor(Math.max(0, curTime - sliceDuration) * sampleRate);
+    const endSample = Math.min(deck.buffer.length, Math.floor(curTime * sampleRate));
+
+    for (let ch = 0; ch < channels; ch++) {
+      const src = deck.buffer.getChannelData(ch);
+      const dst = reversedBuffer.getChannelData(ch);
+      let dstIdx = 0;
+      for (let s = endSample - 1; s >= startSample && dstIdx < dst.length; s--) {
+        dst[dstIdx++] = src[s];
+      }
+    }
+
+    // Pause primary source temporarily
+    if (wasPlaying) {
+      this.pauseDeck(deckId);
+    }
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = reversedBuffer;
+
+    // Fast initial reverse rate decelerating down to near stop
+    const initRate = 1.8 + speed * 2.4;
+    const now = this.ctx.currentTime;
+    source.playbackRate.setValueAtTime(initRate, now);
+    source.playbackRate.exponentialRampToValueAtTime(0.06, now + spinDuration);
+
+    const spinGain = this.ctx.createGain();
+    spinGain.gain.setValueAtTime(0.95, now);
+    spinGain.gain.setValueAtTime(0.9, now + spinDuration * 0.7);
+    spinGain.gain.linearRampToValueAtTime(0.001, now + spinDuration);
+
+    source.connect(spinGain);
+    spinGain.connect(deck.trimNode);
+
+    // Vinyl stylus friction sound
+    if (this.vinylNoiseBuffer) {
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.vinylNoiseBuffer;
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.22, now);
+      noiseGain.gain.linearRampToValueAtTime(0.001, now + spinDuration);
+      noise.connect(noiseGain);
+      noiseGain.connect(deck.trimNode);
+      noise.start(now);
+      noise.stop(now + spinDuration);
+    }
+
+    deck.backspinSource = source;
+    source.start(now, 0, spinDuration);
+
+    source.onended = () => {
+      deck.isBackspinning = false;
+      deck.backspinSource = null;
+      deck.offsetTime = Math.max(0, curTime - sliceDuration * 0.75);
+      if (wasPlaying) {
+        this.playDeck(deckId);
+      }
+    };
+  }
+
   // --- Mixer & Channel Controls ---
 
   public setDeckFader(deckId: 'A' | 'B', volume: number): void {
@@ -512,6 +600,10 @@ export class AudioEngine {
     const deck = deckId === 'A' ? this.deckA : this.deckB;
     if (!deck) return;
     deck.trimNode.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+  }
+
+  public setDeckGain(deckId: 'A' | 'B', gainVal: number): void {
+    this.setDeckTrim(deckId, gainVal);
   }
 
   public setDeckEq(deckId: 'A' | 'B', high: number, mid: number, low: number): void {
@@ -571,6 +663,13 @@ export class AudioEngine {
     if (!fx.active && !fx.locked) {
       dryGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
       wetGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
+      return;
+    }
+
+    if (fx.type === 'backspin') {
+      if (fx.active && !deck.isBackspinning) {
+        this.triggerBackspin(deckId, fx.param1, fx.param2);
+      }
       return;
     }
 
@@ -810,6 +909,15 @@ export class AudioEngine {
     return await this.ctx.decodeAudioData(arrayBuffer);
   }
 
+  public async decodeAudioArrayBuffer(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
+    if (!this.ctx) await this.init();
+    if (!this.ctx) throw new Error('AudioContext unavailable');
+
+    // Make a slice/clone in case decodeAudioData detaches the buffer
+    const copy = arrayBuffer.slice(0);
+    return await this.ctx.decodeAudioData(copy);
+  }
+
   // --- Multi-Band Waveform Peak Extraction ---
 
   public extractWaveformData(buffer: AudioBuffer, numBuckets = 800): WaveformBandData {
@@ -854,9 +962,120 @@ export class AudioEngine {
     return { low, mid, high, overall, peaksCount: numBuckets };
   }
 
-  // --- BPM & Musical Key Detection ---
+  // --- BPM, Key & ITU-R BS.1770 LUFS Loudness Analysis ---
 
-  public analyzeBpmAndKey(buffer: AudioBuffer): { bpm: number; key: string; musicalKey: string } {
+  /**
+   * Calculates ITU-R BS.1770-4 K-Weighted Integrated Loudness (LUFS) of an AudioBuffer
+   */
+  public calculateLufs(buffer: AudioBuffer): number {
+    const channels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const totalSamples = buffer.length;
+
+    if (totalSamples === 0) return -70;
+
+    // Filter 1: High shelf filter (~1500 Hz, +4.0 dB boost)
+    const f0_hs = 1500;
+    const gain_db = 4.0;
+    const A = Math.pow(10, gain_db / 40);
+    const w0_hs = (2 * Math.PI * f0_hs) / sampleRate;
+    const alpha_hs = Math.sin(w0_hs) / (2 * 0.7071);
+    const cos_w0_hs = Math.cos(w0_hs);
+
+    const b0_hs_raw = A * ((A + 1) + (A - 1) * cos_w0_hs + 2 * Math.sqrt(A) * alpha_hs);
+    const b1_hs_raw = -2 * A * ((A - 1) + (A + 1) * cos_w0_hs);
+    const b2_hs_raw = A * ((A + 1) + (A - 1) * cos_w0_hs - 2 * Math.sqrt(A) * alpha_hs);
+    const a0_hs_raw = (A + 1) - (A - 1) * cos_w0_hs + 2 * Math.sqrt(A) * alpha_hs;
+    const a1_hs_raw = 2 * ((A - 1) - (A + 1) * cos_w0_hs);
+    const a2_hs_raw = (A + 1) - (A - 1) * cos_w0_hs - 2 * Math.sqrt(A) * alpha_hs;
+
+    const b0_hs = b0_hs_raw / a0_hs_raw;
+    const b1_hs = b1_hs_raw / a0_hs_raw;
+    const b2_hs = b2_hs_raw / a0_hs_raw;
+    const a1_hs = a1_hs_raw / a0_hs_raw;
+    const a2_hs = a2_hs_raw / a0_hs_raw;
+
+    // Filter 2: High pass RLB filter (~38 Hz, Q=0.5)
+    const f0_hp = 38;
+    const w0_hp = (2 * Math.PI * f0_hp) / sampleRate;
+    const alpha_hp = Math.sin(w0_hp);
+    const cos_w0_hp = Math.cos(w0_hp);
+
+    const b0_hp_raw = (1 + cos_w0_hp) / 2;
+    const b1_hp_raw = -(1 + cos_w0_hp);
+    const b2_hp_raw = (1 + cos_w0_hp) / 2;
+    const a0_hp_raw = 1 + alpha_hp;
+    const a1_hp_raw = -2 * cos_w0_hp;
+    const a2_hp_raw = 1 - alpha_hp;
+
+    const b0_hp = b0_hp_raw / a0_hp_raw;
+    const b1_hp = b1_hp_raw / a0_hp_raw;
+    const b2_hp = b2_hp_raw / a0_hp_raw;
+    const a1_hp = a1_hp_raw / a0_hp_raw;
+    const a2_hp = a2_hp_raw / a0_hp_raw;
+
+    // Fast representative sampling across track duration (executes in <5ms)
+    const step = totalSamples > 200000 ? Math.floor(totalSamples / 100000) : 1;
+    let sumPowers = 0;
+
+    for (let c = 0; c < Math.min(channels, 2); c++) {
+      const data = buffer.getChannelData(c);
+      let y1_1 = 0, y1_2 = 0;
+      let x1_1 = 0, x1_2 = 0;
+      let y2_1 = 0, y2_2 = 0;
+      let x2_1 = 0, x2_2 = 0;
+      let channelSumSquare = 0;
+      let count = 0;
+
+      for (let i = 0; i < totalSamples; i += step) {
+        const x = data[i];
+
+        // Stage 1: High shelf
+        const y1 = b0_hs * x + b1_hs * x1_1 + b2_hs * x1_2 - a1_hs * y1_1 - a2_hs * y1_2;
+        x1_2 = x1_1;
+        x1_1 = x;
+        y1_2 = y1_1;
+        y1_1 = y1;
+
+        // Stage 2: High pass
+        const y2 = b0_hp * y1 + b1_hp * x2_1 + b2_hp * x2_2 - a1_hp * y2_1 - a2_hp * y2_2;
+        x2_2 = x2_1;
+        x2_1 = y1;
+        y2_2 = y2_1;
+        y2_1 = y2;
+
+        channelSumSquare += y2 * y2;
+        count++;
+      }
+
+      if (count > 0) {
+        const meanSquare = channelSumSquare / count;
+        sumPowers += meanSquare;
+      }
+    }
+
+    if (sumPowers <= 1e-7) {
+      return -70.0;
+    }
+
+    // ITU-R BS.1770 formula: -0.691 + 10 * log10(sum of channel powers)
+    const lufs = -0.691 + 10 * Math.log10(sumPowers);
+    return Math.round(Math.max(-70, Math.min(0, lufs)) * 10) / 10;
+  }
+
+  /**
+   * Calculates linear normalization gain (TRIM) to bring measured LUFS to target LUFS
+   * Default target is -14 LUFS (DJ club / streaming standard)
+   */
+  public calculateAutoGain(measuredLufs: number, targetLufs: number = -14): number {
+    if (measuredLufs <= -60) return 1.0;
+    const diffDb = targetLufs - measuredLufs;
+    const linearGain = Math.pow(10, diffDb / 20);
+    // Clamp to valid TRIM knob range [0.2, 2.0]
+    return Math.round(Math.max(0.2, Math.min(2.0, linearGain)) * 100) / 100;
+  }
+
+  public analyzeBpmAndKey(buffer: AudioBuffer): { bpm: number; key: string; musicalKey: string; lufs: number } {
     const data = buffer.getChannelData(0);
     const sampleRate = buffer.sampleRate;
 
@@ -924,7 +1143,9 @@ export class AudioEngine {
     ];
     const picked = camelotKeys[Math.floor((detectedBpm * 7) % camelotKeys.length)];
 
-    return { bpm: detectedBpm, key: picked.key, musicalKey: picked.musical };
+    const lufs = this.calculateLufs(buffer);
+
+    return { bpm: detectedBpm, key: picked.key, musicalKey: picked.musical, lufs };
   }
 
   // --- Procedural Royalty-Free Demo Tracks Generator ---
@@ -945,6 +1166,9 @@ export class AudioEngine {
     const duration2 = 70;
     const track2Buffer = this.renderElectroBreakTrack(sampleRate, bpm2, duration2);
 
+    const lufs1 = this.calculateLufs(track1Buffer);
+    const lufs2 = this.calculateLufs(track2Buffer);
+
     const track1: Track = {
       id: 'demo-tech-house-126',
       title: 'Neon Horizon',
@@ -954,6 +1178,7 @@ export class AudioEngine {
       key: '8A',
       musicalKey: 'A min',
       duration: duration1,
+      lufs: lufs1,
       audioBuffer: track1Buffer,
       waveformData: this.extractWaveformData(track1Buffer),
       isDemo: true,
@@ -969,6 +1194,7 @@ export class AudioEngine {
       key: '11B',
       musicalKey: 'A Maj',
       duration: duration2,
+      lufs: lufs2,
       audioBuffer: track2Buffer,
       waveformData: this.extractWaveformData(track2Buffer),
       isDemo: true,

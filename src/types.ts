@@ -12,7 +12,8 @@ export type FxType =
   | 'roll'
   | 'distortion'
   | 'tremolo'
-  | 'pitch_shift';
+  | 'pitch_shift'
+  | 'backspin';
 
 export interface FxConfig {
   type: FxType;
@@ -57,11 +58,15 @@ export interface Track {
   key: string;         // Camelot key e.g. "8A" or "4B"
   musicalKey: string;  // e.g. "Am" or "F#"
   duration: number;    // in seconds
-  audioBuffer: AudioBuffer | null;
+  lufs?: number;       // Integrated Loudness (LUFS, ITU-R BS.1770)
+  audioBuffer?: AudioBuffer | null;
   waveformData?: WaveformBandData;
   isDemo?: boolean;
   fileFormat?: string; // mp3, wav, m4a, ogg
   fileName?: string;
+  uri?: string;
+  isScanned?: boolean;
+  file?: File;
 }
 
 export interface DeckState {

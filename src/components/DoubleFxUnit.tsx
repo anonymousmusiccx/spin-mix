@@ -5,9 +5,9 @@
 
 import React, { useState } from 'react';
 import { FxState, FxType } from '../types';
-import { FX_LIST } from '../audio/audioEngine';
+import { FX_LIST, AudioEngine } from '../audio/audioEngine';
 import { RotaryKnob } from './RotaryKnob';
-import { Lock, Unlock, Sparkles, Layers, Sliders } from 'lucide-react';
+import { Lock, Unlock, Sparkles, Layers, Sliders, RotateCcw } from 'lucide-react';
 
 interface DoubleFxUnitProps {
   deckId: 'A' | 'B';
@@ -165,30 +165,45 @@ const DoubleFxUnitComponent: React.FC<DoubleFxUnitProps> = ({
             />
           </div>
 
-          {/* Action Buttons: On/Off & FX Freeze/Lock */}
+          {/* Action Buttons: On/Off & FX Freeze/Lock or Trigger Backspin */}
           <div className="grid grid-cols-2 gap-2 mt-1">
-            <button
-              onClick={() => onUpdateFx1({ active: !fx1.active })}
-              className={`py-1 text-[11px] font-bold rounded uppercase transition-all shadow-tactile-btn ${
-                fx1.active
-                  ? theme.activeBtn
-                  : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
-              }`}
-            >
-              {fx1.active ? 'FX 1 ON' : 'FX 1 OFF'}
-            </button>
-            <button
-              onClick={() => onUpdateFx1({ locked: !fx1.locked, active: true })}
-              className={`py-1 text-[11px] font-bold rounded flex items-center justify-center gap-1 uppercase transition-all shadow-tactile-btn ${
-                fx1.locked
-                  ? 'bg-blue-600 text-white font-black led-glow-cyan border border-blue-400'
-                  : 'bg-slate-800/90 text-slate-400 border border-slate-700 hover:text-blue-300'
-              }`}
-              title="Lock effect tail/feedback loop during transitions"
-            >
-              {fx1.locked ? <Lock className="w-3 h-3 text-white" /> : <Unlock className="w-3 h-3 text-slate-500" />}
-              {fx1.locked ? 'FREEZE' : 'FREEZE'}
-            </button>
+            {fx1.type === 'backspin' ? (
+              <button
+                onClick={() => {
+                  onUpdateFx1({ active: true });
+                  AudioEngine.getInstance().triggerBackspin(deckId, fx1.param1, fx1.param2);
+                }}
+                className="col-span-2 py-1.5 text-xs font-black rounded flex items-center justify-center gap-1.5 uppercase transition-all shadow-tactile-btn bg-gradient-to-r from-cyan-500 to-blue-600 text-black hover:brightness-110 active:scale-95 led-glow-cyan"
+              >
+                <RotateCcw className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '3s' }} />
+                <span>SPIN BACK NOW</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => onUpdateFx1({ active: !fx1.active })}
+                  className={`py-1 text-[11px] font-bold rounded uppercase transition-all shadow-tactile-btn ${
+                    fx1.active
+                      ? theme.activeBtn
+                      : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                  }`}
+                >
+                  {fx1.active ? 'FX 1 ON' : 'FX 1 OFF'}
+                </button>
+                <button
+                  onClick={() => onUpdateFx1({ locked: !fx1.locked, active: true })}
+                  className={`py-1 text-[11px] font-bold rounded flex items-center justify-center gap-1 uppercase transition-all shadow-tactile-btn ${
+                    fx1.locked
+                      ? 'bg-blue-600 text-white font-black led-glow-cyan border border-blue-400'
+                      : 'bg-slate-800/90 text-slate-400 border border-slate-700 hover:text-blue-300'
+                  }`}
+                  title="Lock effect tail/feedback loop during transitions"
+                >
+                  {fx1.locked ? <Lock className="w-3 h-3 text-white" /> : <Unlock className="w-3 h-3 text-slate-500" />}
+                  {fx1.locked ? 'FREEZE' : 'FREEZE'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -249,30 +264,45 @@ const DoubleFxUnitComponent: React.FC<DoubleFxUnitProps> = ({
             />
           </div>
 
-          {/* Action Buttons: On/Off & FX Freeze/Lock */}
+          {/* Action Buttons: On/Off & FX Freeze/Lock or Trigger Backspin */}
           <div className="grid grid-cols-2 gap-2 mt-1">
-            <button
-              onClick={() => onUpdateFx2({ active: !fx2.active })}
-              className={`py-1 text-[11px] font-bold rounded uppercase transition-all shadow-tactile-btn ${
-                fx2.active
-                  ? 'bg-amber-500 text-black font-black led-glow-amber'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
-              }`}
-            >
-              {fx2.active ? 'FX 2 ON' : 'FX 2 OFF'}
-            </button>
-            <button
-              onClick={() => onUpdateFx2({ locked: !fx2.locked, active: true })}
-              className={`py-1 text-[11px] font-bold rounded flex items-center justify-center gap-1 uppercase transition-all shadow-tactile-btn ${
-                fx2.locked
-                  ? 'bg-amber-600 text-white font-black led-glow-amber border border-amber-400'
-                  : 'bg-slate-800/90 text-slate-400 border border-slate-700 hover:text-amber-300'
-              }`}
-              title="Lock effect tail/feedback loop during transitions"
-            >
-              {fx2.locked ? <Lock className="w-3 h-3 text-white" /> : <Unlock className="w-3 h-3 text-slate-500" />}
-              {fx2.locked ? 'FREEZE' : 'FREEZE'}
-            </button>
+            {fx2.type === 'backspin' ? (
+              <button
+                onClick={() => {
+                  onUpdateFx2({ active: true });
+                  AudioEngine.getInstance().triggerBackspin(deckId, fx2.param1, fx2.param2);
+                }}
+                className="col-span-2 py-1.5 text-xs font-black rounded flex items-center justify-center gap-1.5 uppercase transition-all shadow-tactile-btn bg-gradient-to-r from-amber-500 to-orange-600 text-black hover:brightness-110 active:scale-95 led-glow-amber"
+              >
+                <RotateCcw className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '3s' }} />
+                <span>SPIN BACK NOW</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => onUpdateFx2({ active: !fx2.active })}
+                  className={`py-1 text-[11px] font-bold rounded uppercase transition-all shadow-tactile-btn ${
+                    fx2.active
+                      ? 'bg-amber-500 text-black font-black led-glow-amber'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                  }`}
+                >
+                  {fx2.active ? 'FX 2 ON' : 'FX 2 OFF'}
+                </button>
+                <button
+                  onClick={() => onUpdateFx2({ locked: !fx2.locked, active: true })}
+                  className={`py-1 text-[11px] font-bold rounded flex items-center justify-center gap-1 uppercase transition-all shadow-tactile-btn ${
+                    fx2.locked
+                      ? 'bg-amber-600 text-white font-black led-glow-amber border border-amber-400'
+                      : 'bg-slate-800/90 text-slate-400 border border-slate-700 hover:text-amber-300'
+                  }`}
+                  title="Lock effect tail/feedback loop during transitions"
+                >
+                  {fx2.locked ? <Lock className="w-3 h-3 text-white" /> : <Unlock className="w-3 h-3 text-slate-500" />}
+                  {fx2.locked ? 'FREEZE' : 'FREEZE'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -65,8 +65,22 @@ const WaveformDisplayComponent: React.FC<WaveformDisplayProps> = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const width = canvas.width;
-      const height = canvas.height;
+      // Dynamic resolution scaling for razor-sharp rendering on any screen & fullscreen
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetW = Math.max(300, Math.floor(rect.width * dpr));
+      const targetH = Math.max(60, Math.floor(rect.height * dpr));
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width || canvas.width / dpr;
+      const height = rect.height || canvas.height / dpr;
       const centerY = height / 2;
 
       ctx.clearRect(0, 0, width, height);
@@ -89,6 +103,7 @@ const WaveformDisplayComponent: React.FC<WaveformDisplayProps> = ({
         ctx.font = 'bold 11px "Chakra Petch", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(`DECK ${deckId} STANDBY - LOAD TRACK FROM LIBRARY`, width / 2, centerY + 4);
+        ctx.restore();
         return;
       }
 
@@ -103,7 +118,7 @@ const WaveformDisplayComponent: React.FC<WaveformDisplayProps> = ({
       // =========================================================================
       // 1. DRAW MULTI-BAND WAVEFORM BARS FIRST
       // =========================================================================
-      const numBars = Math.min(width, 400);
+      const numBars = Math.min(Math.floor(width), 600);
       const barWidth = width / numBars;
 
       for (let i = 0; i < numBars; i++) {
@@ -312,6 +327,8 @@ const WaveformDisplayComponent: React.FC<WaveformDisplayProps> = ({
       ctx.lineTo(playheadX, height - 9);
       ctx.closePath();
       ctx.fill();
+
+      ctx.restore();
     };
 
     const render = () => {
@@ -548,8 +565,6 @@ const WaveformDisplayComponent: React.FC<WaveformDisplayProps> = ({
         <div className="relative w-full h-16 sm:h-20">
           <canvas
             ref={canvasRefA}
-            width={1200}
-            height={80}
             className="w-full h-full block"
           />
           <div className="absolute top-1 left-2 pointer-events-none flex items-center gap-1">
@@ -583,8 +598,6 @@ const WaveformDisplayComponent: React.FC<WaveformDisplayProps> = ({
         <div className="relative w-full h-16 sm:h-20">
           <canvas
             ref={canvasRefB}
-            width={1200}
-            height={80}
             className="w-full h-full block"
           />
           <div className="absolute top-1 left-2 pointer-events-none flex items-center gap-1">

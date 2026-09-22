@@ -6,7 +6,6 @@
 
 import React from 'react';
 import { DeckState, SamplerPad, FxConfig } from '../types';
-import { AudioEngine } from '../audio/audioEngine';
 import { MixerSection } from './MixerSection';
 import { DoubleFxUnit } from './DoubleFxUnit';
 import { Sampler6Pad } from './Sampler6Pad';
@@ -25,12 +24,16 @@ interface PerformanceModalProps {
   crossfader: number;
   crossfaderCurve: 'smooth' | 'sharp';
   masterVolume: number;
-  audioEngine: AudioEngine;
+  meterLevels: { master: number; deckA: number; deckB: number };
   onUpdateDeckA: (update: Partial<DeckState>) => void;
   onUpdateDeckB: (update: Partial<DeckState>) => void;
   onCrossfaderChange: (val: number) => void;
   onCrossfaderCurveToggle: () => void;
   onMasterVolumeChange: (val: number) => void;
+  autoGainEnabled?: boolean;
+  targetLufs?: number;
+  onToggleAutoGain?: () => void;
+  onTargetLufsChange?: (val: number) => void;
   // FX Props
   onUpdateFx: (deckId: 'A' | 'B', fxSlot: 1 | 2, update: Partial<FxConfig>) => void;
   // Sampler Props
@@ -51,12 +54,16 @@ export const PerformanceModal: React.FC<PerformanceModalProps> = ({
   crossfader,
   crossfaderCurve,
   masterVolume,
-  audioEngine,
+  meterLevels,
   onUpdateDeckA,
   onUpdateDeckB,
   onCrossfaderChange,
   onCrossfaderCurveToggle,
   onMasterVolumeChange,
+  autoGainEnabled,
+  targetLufs,
+  onToggleAutoGain,
+  onTargetLufsChange,
   onUpdateFx,
   samplerPads,
   onTriggerSamplerPad,
@@ -96,7 +103,7 @@ export const PerformanceModal: React.FC<PerformanceModalProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 text-pink-300" />
-              <span>DOUBLE FX [10 FX]</span>
+              <span>DOUBLE FX [11 FX]</span>
               {(deckA.fx1.active || deckA.fx2.active || deckB.fx1.active || deckB.fx2.active) && (
                 <span className="w-2 h-2 rounded-full bg-emerald-400 led-glow-green animate-ping" />
               )}
@@ -138,7 +145,11 @@ export const PerformanceModal: React.FC<PerformanceModalProps> = ({
                 crossfader={crossfader}
                 crossfaderCurve={crossfaderCurve}
                 masterVolume={masterVolume}
-                audioEngine={audioEngine}
+                meterLevels={meterLevels}
+                autoGainEnabled={autoGainEnabled}
+                targetLufs={targetLufs}
+                onToggleAutoGain={onToggleAutoGain}
+                onTargetLufsChange={onTargetLufsChange}
                 onUpdateDeckA={update => onUpdateDeckA(update)}
                 onUpdateDeckB={update => onUpdateDeckB(update)}
                 onCrossfaderChange={onCrossfaderChange}
