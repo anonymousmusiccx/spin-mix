@@ -29,8 +29,15 @@ jobs:
       - name: Install Capacitor
         run: npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
 
-      - name: Init Capacitor project
-        run: npx cap init "Spin Mix" "com.anonymousmusiccx.spinmix" --web-dir dist
+      - name: Create Capacitor config
+        run: |
+          cat > capacitor.config.json << 'EOF'
+          {
+            "appId": "com.anonymousmusiccx.spinmix",
+            "appName": "Spin Mix",
+            "webDir": "dist"
+          }
+          EOF
 
       - name: Add Android platform
         run: npx cap add android
