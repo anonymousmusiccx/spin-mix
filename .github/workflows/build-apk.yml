@@ -55,7 +55,7 @@ jobs:
           EOF
 
       - name: Copy web build into Android project
-        run: npx cap copy android
+        run: npx cap sync android
 
       - name: Setup JDK
         uses: actions/setup-java@v4
