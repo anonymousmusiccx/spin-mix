@@ -126,3 +126,9 @@ export interface RecordingItem {
   blob: Blob;
   url: string;
 }
+export interface AppSettings {
+  theme: 'ddj-flx6' | 'dark' | 'light';
+  contactEmail: string;
+  fxUnitMode: 'single' | 'dual';
+  latencyMode: 'low-latency' | 'balanced';
+}
