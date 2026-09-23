@@ -1557,39 +1557,3 @@ export class AudioEngine {
     return buf;
   }
 }
-// src/audio/audioEngine.ts
-class AudioEngine {
-  private ctx: AudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ latencyHint: 'interactive' });
-
-  // Play Cue immediately with zero latency for smooth beat-style double touching
-  triggerHotCue(deckId: 'A' | 'B', cueTime: number) {
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    }
-    
-    const deck = this.getDeck(deckId);
-    if (!deck || !deck.buffer) return;
-
-    // Instant precise scheduling
-    const now = this.ctx.currentTime;
-    if (deck.source) {
-      try { deck.source.stop(now); } catch (_) {}
-    }
-
-    deck.source = this.ctx.createBufferSource();
-    deck.source.buffer = deck.buffer;
-    deck.source.connect(deck.outputNode);
-    deck.source.start(now, cueTime);
-  }
-
-  // Smooth FX Parameter drag without audio pops or latency glitches
-  updateFxParam(deckId: 'A' | 'B', fxType: string, paramValue: number) {
-    const fxNode = this.getFxNode(deckId, fxType);
-    if (fxNode && fxNode.parameter) {
-      // Exponential/Linear ramping avoids audio clicks during rapid dragging
-      fxNode.parameter.setTargetAtTime(paramValue, this.ctx.currentTime, 0.015);
-    }
-  }
-}
-
-export const audioEngine = new AudioEngine();
