@@ -1,24 +1,26 @@
 @import "tailwindcss";
 
 @layer utilities {
-  /* Carbon fiber & brushed metallic console texture */
-  .bg-carbon {
-    background-color: #0d0f15;
-    background-image: 
-      radial-gradient(#1e2230 15%, transparent 16%),
-      radial-gradient(#151822 15%, transparent 16%);
-    background-size: 8px 8px;
-    background-position: 0 0, 4px 4px;
-  }
+  /* src/index.css */
+.ddj-flx6-theme {
+  background: radial-gradient(circle at center, #23272e 0%, #17191d 70%, #0f1012 100%);
+  color: #e2e8f0;
+  font-family: 'Inter', sans-serif;
+}
 
-  .bg-brushed-metal {
-    background: linear-gradient(135deg, #1f2430 0%, #161922 50%, #252b3b 100%);
-  }
+.controller-panel {
+  background: linear-gradient(180deg, #1f232a 0%, #141619 100%);
+  border: 1px solid #2d323b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+}
 
-  .bg-metal-chassis {
-    background: radial-gradient(circle at 50% 0%, #1d212d, #0d0e14);
-    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 10px 30px rgba(0, 0, 0, 0.8);
-  }
+/* Vertical slider orientation support */
+input[type="range"].vertical-slider {
+  writing-mode: bt-lr;
+  -webkit-appearance: slider-vertical;
+  width: 8px;
+}
 
   /* 3D bevels & tactile shadows */
   .shadow-bevel-out {
