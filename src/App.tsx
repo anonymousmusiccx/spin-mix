@@ -1420,49 +1420,4 @@ export default function App() {
       />
     </div>
   );
-  import React, { useState, useEffect } from 'react';
-
-const DEFAULT_SETTINGS = {
-  theme: 'ddj-flx6',
-  contactEmail: 'lmck@programmer.net',
-  fxUnitMode: 'dual',
-  latencyMode: 'low-latency'
 };
-
-export const App = () => {
-  // 1. Persistent Settings Storage
-  const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('spinmix_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('spinmix_settings', JSON.stringify(settings));
-  }, [settings]);
-
-  // 2. Default BPM 0 when no track loaded
-  const [deckA, setDeckA] = useState({ track: null, bpm: 0 });
-  const [deckB, setDeckB] = useState({ track: null, bpm: 0 });
-
-  return (
-    <div className="app-container ddj-flx6-theme">
-      {/* Far Left Branding */}
-      <header className="top-header flex items-center justify-between px-4 py-2">
-        <div className="branding text-lg font-bold">
-          SPIN MIX, <span className="text-cyan-400">by Dj Spintla</span>
-        </div>
-      </header>
-
-      {/* Controller Layout */}
-      {/* ... Deck Controls & Mixer ... */}
-
-      {/* Settings Panel Footer */}
-      <footer className="settings-footer text-xs text-gray-400 p-2 flex justify-between">
-        <span>Settings Saved Automatically</span>
-        <span>Reachout Contact: <a href={`mailto:${settings.contactEmail}`} className="underline text-cyan-400">{settings.contactEmail}</a></span>
-      </footer>
-    </div>
-  );
-};
-
-}
